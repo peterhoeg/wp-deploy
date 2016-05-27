@@ -1,5 +1,4 @@
 namespace :wp do
-
   task :set_permissions do
     on roles(:app) do
       execute :chmod, "666 #{shared_path}/.htaccess"
@@ -7,35 +6,33 @@ namespace :wp do
     end
   end
 
-  desc "Setup WP on remote environment"
+  desc 'Setup WP on remote environment'
   task :setup do
     invoke 'db:confirm'
     invoke 'deploy'
     on roles(:web) do
-
       # Get details for WordPress config file
-      secret_keys = capture("curl -s -k https://api.wordpress.org/secret-key/1.1/salt")
-      stage_url = YAML::load_file('config/environments.yml')[fetch(:stage).to_s]['stage_url']
-      database = YAML::load_file('config/database.yml')[fetch(:stage).to_s]
+      secret_keys = capture('curl -s -k https://api.wordpress.org/secret-key/1.1/salt')
+      stage_url = YAML.load_file('config/environments.yml')[fetch(:stage).to_s]['stage_url']
+      database = YAML.load_file('config/database.yml')[fetch(:stage).to_s]
 
       # Create config file in remote environment
       db_config = ERB.new(File.read('config/templates/wp-config.php.erb')).result(binding)
       io = StringIO.new(db_config)
-      upload! io, File.join(shared_path, "wp-config.php")
+      upload! io, File.join(shared_path, 'wp-config.php')
 
       # Create .htaccess in remote environment
       accessfile = ERB.new(File.read('config/templates/.htaccess.erb')).result(binding)
       io = StringIO.new(accessfile)
-      upload! io, File.join(shared_path, ".htaccess")
+      upload! io, File.join(shared_path, '.htaccess')
 
       within release_path do
-
         # Generate a random password
-        o = [('a'..'z'), ('A'..'Z')].map { |i| i.to_a }.flatten
+        o = [('a'..'z'), ('A'..'Z')].map(&:to_a).flatten
         password = (0...18).map { o[rand(o.length)] }.join
 
         # Get WP details from YAML
-        settings = YAML::load_file('config/settings.yml')
+        settings = YAML.load_file('config/settings.yml')
         title = settings['wp_sitename']
         user = settings['wp_user']
         email = settings['wp_email']
@@ -60,14 +57,12 @@ namespace :wp do
         =========================================================================
         \e[0m
         MSG
-
       end
-
     end
   end
 
   namespace :core do
-    desc "Updates the WP core submodule to the latest tag"
+    desc 'Updates the WP core submodule to the latest tag'
     task :update do
       system('
       cd wordpress
@@ -76,9 +71,7 @@ namespace :wp do
       git checkout $latestTag
       ')
       invoke 'cache:repo:purge'
-      puts "WordPress submodule is now at the latest version. You should now commit your changes."
-
+      puts 'WordPress submodule is now at the latest version. You should now commit your changes.'
     end
   end
-
 end

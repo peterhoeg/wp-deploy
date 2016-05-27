@@ -1,23 +1,19 @@
 namespace :db do
-
-	desc "Creates a sensible backup name for SQL files"
+  desc 'Creates a sensible backup name for SQL files'
   task :backup_name do
-  	on roles(:web) do
-
-	    now = Time.now
-	    execute :mkdir, "-p #{shared_path}/db_backups"
-	    backup_time = [now.year,now.month,now.day,now.hour,now.min,now.sec].join()
-	    set :backup_filename, backup_time
-	    set :backup_file, "#{shared_path}/db_backups/#{backup_time}.sql"
-
-	  end
+    on roles(:web) do
+      now = Time.now
+      execute :mkdir, "-p #{shared_path}/db_backups"
+      backup_time = [now.year, now.month, now.day, now.hour, now.min, now.sec].join
+      set :backup_filename, backup_time
+      set :backup_file, "#{shared_path}/db_backups/#{backup_time}.sql"
+    end
   end
 
-  desc "Confirms the database action before proceeeding"
+  desc 'Confirms the database action before proceeeding'
   task :confirm do
     on roles(:web) do
-
-      database = YAML::load_file('config/database.yml')[fetch(:stage).to_s]
+      database = YAML.load_file('config/database.yml')[fetch(:stage).to_s]
 
       set :confirmed, proc {
         puts <<-WARN
@@ -33,12 +29,12 @@ namespace :db do
   \033[0m
         WARN
         ask :answer, database['database']
-        if fetch(:answer) == database['database'] then
+        if fetch(:answer) == database['database']
           true
         else
           loopCount = 1
           loop do
-            loopCount = loopCount + 1
+            loopCount += 1
             puts "\033[31mYou typed the database name incorrectly. Please enter \033[0m\033[1m\033[34m#{database['database']}\033[0m\033[22m\033[0m\033[0m"
             ask :answer, database['database']
             break if loopCount == 3
@@ -46,9 +42,7 @@ namespace :db do
           end
         end
 
-        if fetch(:answer) == database['database'] then
-          true
-        end
+        true if fetch(:answer) == database['database']
       }.call
 
       unless fetch(:confirmed)
@@ -61,86 +55,70 @@ namespace :db do
         WARN
         exit
       end
-
     end
   end
 
-  desc "Takes a database dump from remote server"
+  desc 'Takes a database dump from remote server'
   task :backup do
-	 invoke 'db:backup_name'
-	  on roles(:db) do
+    invoke 'db:backup_name'
+    on roles(:db) do
+      within release_path do
+        execute :wp, "db export #{fetch(:backup_file)} --add-drop-table"
+      end
 
-	  	within release_path do
-		     execute :wp, "db export #{fetch(:backup_file)} --add-drop-table"
-		  end
+      system('mkdir -p db_backups')
+      download! fetch(:backup_file).to_s, "db_backups/#{fetch(:backup_filename)}.sql"
 
-		 system('mkdir -p db_backups')
-		 download! "#{fetch(:backup_file)}", "db_backups/#{fetch(:backup_filename)}.sql"
+      within release_path do
+        execute :rm, fetch(:backup_file).to_s
+      end
+    end
+  end
 
-		 within release_path do
-		   execute :rm, "#{fetch(:backup_file)}"
-		 end
+  desc 'Imports the remote database into your local environment'
+  task :pull do
+    invoke 'db:backup'
 
-	  end
-	end
+    on roles(:db) do
+      run_locally do
+        remote_url = YAML.load_file('config/environments.yml')[fetch(:stage).to_s]['stage_url']
+        local_url = YAML.load_file('config/settings.yml')['local_url']
 
-	desc "Imports the remote database into your local environment"
-	task :pull do
-		invoke 'db:backup'
+        execute :wp, "db import db_backups/#{fetch(:backup_filename)}.sql"
+        execute :wp, "search-replace #{remote_url} #{local_url}"
+        execute :rm, "db_backups/#{fetch(:backup_filename)}.sql"
 
-		on roles(:db) do
+        execute :rmdir, 'db_backups' if Dir['db_backups/*'].empty?
+      end
+    end
+  end
 
-			run_locally do
+  desc 'Imports the local database into your remote environment'
+  task :push do
+    invoke 'db:confirm'
 
-                remote_url = YAML::load_file('config/environments.yml')[fetch(:stage).to_s]['stage_url']
-                local_url = YAML::load_file('config/settings.yml')['local_url']
+    invoke 'db:backup_name'
+    on roles(:db) do
+      run_locally do
+        execute :mkdir, '-p db_backups'
+        execute :wp, "db export db_backups/#{fetch(:backup_filename)}.sql --add-drop-table"
+      end
 
-				execute :wp, "db import db_backups/#{fetch(:backup_filename)}.sql"
-				execute :wp, "search-replace #{remote_url} #{local_url}"
-				execute :rm, "db_backups/#{fetch(:backup_filename)}.sql"
+      upload! "db_backups/#{fetch(:backup_filename)}.sql", fetch(:backup_file).to_s
 
-				if Dir['db_backups/*'].empty?
-					execute :rmdir, "db_backups"
-				end
-			end
+      within release_path do
+        remote_url = YAML.load_file('config/environments.yml')[fetch(:stage).to_s]['stage_url']
+        local_url = YAML.load_file('config/settings.yml')['local_url']
 
-		end
+        execute :wp, "db import #{fetch(:backup_file)}"
+        execute :wp, "search-replace #{local_url} #{remote_url}"
+        execute :rm, fetch(:backup_file).to_s
+      end
 
-	end
-
-	desc "Imports the local database into your remote environment"
-	task :push do
-
-      invoke 'db:confirm'
-
-		invoke 'db:backup_name'
-		on roles(:db) do
-
-			run_locally do
-				execute :mkdir, "-p db_backups"
-				execute :wp, "db export db_backups/#{fetch(:backup_filename)}.sql --add-drop-table"
-			end
-
-			upload! "db_backups/#{fetch(:backup_filename)}.sql", "#{fetch(:backup_file)}"
-
-			within release_path do
-
-                remote_url = YAML::load_file('config/environments.yml')[fetch(:stage).to_s]['stage_url']
-                local_url = YAML::load_file('config/settings.yml')['local_url']
-
-				execute :wp, "db import #{fetch(:backup_file)}"
-				execute :wp, "search-replace #{local_url} #{remote_url}"
-				execute :rm, "#{fetch(:backup_file)}"
-			end
-
-			run_locally do
-				execute :rm, "db_backups/#{fetch(:backup_filename)}.sql"
-				if Dir['db_backups/*'].empty?
-					execute :rmdir, "db_backups"
-				end
-			end
-
-		end
-	end
-
+      run_locally do
+        execute :rm, "db_backups/#{fetch(:backup_filename)}.sql"
+        execute :rmdir, 'db_backups' if Dir['db_backups/*'].empty?
+      end
+    end
+  end
 end

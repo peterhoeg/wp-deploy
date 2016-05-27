@@ -1,12 +1,11 @@
 def rsync_args(port)
   args = '-avzO'
   return "#{args} -e 'ssh -p #{port}'" if port.to_i > 0
-  return args
+  args
 end
 
 namespace :uploads do
-
-  desc "Push any changed or new files from local to remote"
+  desc 'Push any changed or new files from local to remote'
   task :push do
     run_locally do
       roles(:all).each do |role|
@@ -15,7 +14,7 @@ namespace :uploads do
     end
   end
 
-  desc "Pull any changed or new files from remote to local"
+  desc 'Pull any changed or new files from remote to local'
   task :pull do
     run_locally do
       roles(:all).each do |role|

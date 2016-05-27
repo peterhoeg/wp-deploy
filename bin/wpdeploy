@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
 
-require "capistrano/wp-deploy/cli"
+require 'capistrano/wp-deploy/cli'
 
 WpdCLI.start(ARGV)
