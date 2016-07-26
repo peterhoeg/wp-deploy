@@ -1,3 +1,10 @@
+require 'uri'
+
+def replace_urls(left, right)
+  left, right = URI(left), URI(right)
+  execute :wp, "search-replace --all-tables #{left.host} #{right.host}"
+end
+
 namespace :db do
   desc 'Creates a sensible backup name for SQL files'
   task :backup_name do
@@ -15,7 +22,7 @@ namespace :db do
     on roles(:web) do
       database = YAML.load_file('config/database.yml')[fetch(:stage).to_s]
 
-      set :confirmed, proc {
+      set :confirmed, lambda {
         puts <<-WARN
   \033[31m
   ========================================================================
@@ -23,26 +30,23 @@ namespace :db do
     WARNING: You're about to overwrite a remote database!
     To continue, please enter the name of the database for this site.
 
-    Datebase name:\033[0m \033[1m \033[34m #{database['database']} \033[0m \033[22m \033[31m
+    Database name:\033[0m \033[1m \033[34m #{database['database']} \033[0m \033[22m \033[31m
 
   ========================================================================
   \033[0m
-        WARN
+WARN
         ask :answer, database['database']
-        if fetch(:answer) == database['database']
-          true
-        else
-          loopCount = 1
-          loop do
-            loopCount += 1
-            puts "\033[31mYou typed the database name incorrectly. Please enter \033[0m\033[1m\033[34m#{database['database']}\033[0m\033[22m\033[0m\033[0m"
-            ask :answer, database['database']
-            break if loopCount == 3
-            break if fetch(:answer) == database['database']
-          end
+        return if fetch(:answer) == database['database']
+        loopCount = 1
+        loop do
+          loopCount += 1
+          puts "\033[31mYou typed the database name incorrectly. Please enter \033[0m\033[1m\033[34m#{database['database']}\033[0m\033[22m\033[0m\033[0m"
+          ask :answer, database['database']
+          break if loopCount == 3
+          break if fetch(:answer) == database['database']
         end
 
-        true if fetch(:answer) == database['database']
+        fetch(:answer) == database['database']
       }.call
 
       unless fetch(:confirmed)
@@ -52,7 +56,7 @@ namespace :db do
     Sorry, you have entered the database name incorrectly too many times
   ========================================================================
   \033[0m
-        WARN
+WARN
         exit
       end
     end
@@ -85,7 +89,7 @@ namespace :db do
         local_url = YAML.load_file('config/settings.yml')['local_url']
 
         execute :wp, "db import db_backups/#{fetch(:backup_filename)}.sql"
-        execute :wp, "search-replace #{remote_url} #{local_url}"
+        replace_urls remote_url, local_url
         execute :rm, "db_backups/#{fetch(:backup_filename)}.sql"
 
         execute :rmdir, 'db_backups' if Dir['db_backups/*'].empty?
@@ -95,7 +99,7 @@ namespace :db do
 
   desc 'Imports the local database into your remote environment'
   task :push do
-    invoke 'db:confirm'
+    # invoke 'db:confirm'
 
     invoke 'db:backup_name'
     on roles(:db) do
@@ -111,7 +115,7 @@ namespace :db do
         local_url = YAML.load_file('config/settings.yml')['local_url']
 
         execute :wp, "db import #{fetch(:backup_file)}"
-        execute :wp, "search-replace #{local_url} #{remote_url}"
+        replace_urls local_url, remote_url
         execute :rm, fetch(:backup_file).to_s
       end
 

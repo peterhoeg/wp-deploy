@@ -9,14 +9,7 @@ class WpdCLI < Thor
   end
 
   desc 'init [DIRECTORY]', 'Initialises the WordPress project in the given directory'
-  def init(path = nil)
-    # If user provided a path, set install directory, else install in current dir
-    installpath = if path
-                    path
-                  else
-                    '.'
-                  end
-
+  def init(installpath = '.')
     say "wp deploy: Intalling wpdeploy in directory #{installpath}", :green
 
     # Check if the project needs initialising

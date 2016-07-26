@@ -1,8 +1,11 @@
 *.gem
 pkg/*
 .bundle
+.direnv/
 *.rbc
 Gemfile.lock
 rdoc
 tmp
 .DS_Store
+.bundle
+.envrc

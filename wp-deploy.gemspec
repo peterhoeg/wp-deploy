@@ -13,7 +13,8 @@ Gem::Specification.new do |s|
   s.homepage    = 'https://github.com/Mixd/wp-deploy'
   s.license     = 'MIT'
 
-  s.add_runtime_dependency 'capistrano', '~> 3.4'
-  s.add_runtime_dependency 'thor', '~> 0.19.1'
-  s.add_runtime_dependency 'wpcli', '~> 0.2.8'
+  s.add_runtime_dependency 'capistrano', '< 3.7.0'
+  s.add_runtime_dependency 'capistrano-git-submodule-strategy'
+  s.add_runtime_dependency 'thor'
+  s.add_runtime_dependency 'wpcli'
 end
